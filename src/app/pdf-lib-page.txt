@@ -1,0 +1,127 @@
+"use client"
+// src/app/page.tsx
+
+import { useState, ChangeEvent } from "react"
+import { PDFDocument, StandardFonts, rgb, PageSizes } from "pdf-lib"
+import fontkit from "@pdf-lib/fontkit"
+
+const Home = () => {
+  const [htmlFile, setHtmlFile] = useState<File | null>(null)
+  const [cssFile, setCssFile] = useState<File | null>(null)
+  const [htmlContent, setHtmlContent] = useState<string | null>(null)
+  const [cssContent, setCssContent] = useState<string | null>(null)
+  const [combinedContent, setCombinedContent] = useState<string | null>(null)
+
+  const handleHtmlFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const content = await e.target.files[0].text()
+      setHtmlFile(e.target.files[0])
+      setHtmlContent(content)
+      combineHtmlAndCss(content, cssContent)
+    }
+  }
+
+  const handleCssFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const content = await e.target.files[0].text()
+      setCssFile(e.target.files[0])
+      setCssContent(content)
+      combineHtmlAndCss(htmlContent, content)
+    }
+  }
+
+  const combineHtmlAndCss = (html: string | null, css: string | null) => {
+    if (html && css) {
+      const combined = `<style>${css}</style>${html}`
+      setCombinedContent(combined)
+    }
+  }
+
+  const handleConvertToPDF = async () => {
+    if (htmlFile && cssFile) {
+      // Create a new PDF document
+      const pdfDoc = await PDFDocument.create()
+
+      // Embed a font (e.g., Helvetica) for text rendering
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+
+      // Get the combined HTML and CSS content
+      const combinedContent = `<style>${cssContent}</style>${htmlContent}`
+
+      // Split content into pages based on height and font size
+      const pageSize: [number, number] = PageSizes.A4 // Use A4 size or customize as needed
+      const fontSize = 12
+      const lineHeight = font.heightAtSize(fontSize)
+
+      const lines = combinedContent.split("\n")
+      const linesPerPage = Math.floor(pageSize[1] / lineHeight)
+
+      for (let i = 0; i < lines.length; i += linesPerPage) {
+        const page = pdfDoc.addPage(pageSize)
+        page.setFont(font)
+
+        const text = lines.slice(i, i + linesPerPage).join("\n")
+        page.drawText(text, {
+          x: 10,
+          y: pageSize[1] - 50,
+          font,
+          size: fontSize,
+          color: rgb(0, 0, 0), // Black color
+        })
+      }
+
+      // Save the PDF document to a Uint8Array
+      const pdfBytes = await pdfDoc.save()
+
+      // Convert the Uint8Array to a Blob
+      const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" })
+
+      // Create a download link and trigger the download
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(pdfBlob)
+      link.download = "generated.pdf"
+      link.click()
+
+      // Revoke the object URL to free up resources
+      URL.revokeObjectURL(link.href)
+    }
+  }
+
+  return (
+    <>
+      <h1>HTML & CSS to PDF Converter</h1>
+      <div style={{ display: "flex", gap: "20px" }}>
+        <div style={{ width: "400px", height: "600px", overflow: "auto" }}>
+          <h2>HTML Preview:</h2>
+          <label>
+            Upload HTML File:
+            <input type="file" accept=".html" onChange={handleHtmlFileChange} />
+          </label>
+          {htmlContent && (
+            <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+          )}
+        </div>
+
+        <div style={{ width: "400px", height: "600px", overflow: "auto" }}>
+          <h2>CSS Preview:</h2>
+          <label>
+            Upload CSS File:
+            <input type="file" accept=".css" onChange={handleCssFileChange} />
+          </label>
+          {cssContent && <pre>{cssContent}</pre>}
+        </div>
+        <div>
+          <h2>Combined Output Preview:</h2>
+          {combinedContent && (
+            <div>
+              <button onClick={handleConvertToPDF}>Convert to PDF</button>
+              <div dangerouslySetInnerHTML={{ __html: combinedContent }} />
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default Home
